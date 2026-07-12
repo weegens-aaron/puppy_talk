@@ -1,5 +1,9 @@
 # puppy_talk
 
+> **Proof of concept** -- tossed together in one evening. It works (and
+> is fun), but expect rough edges: minimal error handling in places, no
+> test suite, and APIs/settings may change without ceremony.
+
 A [Code Puppy](https://github.com/mpfaffenberger/code_puppy) plugin that
 reads the agent's responses aloud using
 [pocket-tts](https://github.com/kyutai-labs/pocket-tts) (Kyutai's
