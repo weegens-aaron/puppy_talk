@@ -55,16 +55,39 @@ def stop() -> None:
         stream.abort()
 
 
+def _sounddevice_available() -> bool:
+    try:
+        import sounddevice  # noqa: F401
+
+        return True
+    except (ImportError, OSError):  # OSError: PortAudio lib missing
+        return False
+
+
 def stream_supported() -> bool:
-    """True when low-latency PCM streaming is available (Windows waveOut)."""
-    return sys.platform == "win32"
+    """True when low-latency PCM streaming is available.
+
+    Windows always qualifies (winmm waveOut, stdlib). Other platforms
+    qualify when the optional `sounddevice` package is importable.
+    """
+    return sys.platform == "win32" or _sounddevice_available()
+
+
+def _open_pcm_stream(rate: int, channels: int, bits: int):
+    """Return the best available PCM output stream for this platform."""
+    if sys.platform == "win32":
+        return _WaveOutStream(rate, channels, bits)
+    if _sounddevice_available():
+        return _SoundDeviceStream(rate, channels, bits)
+    raise OSError("no PCM streaming backend available")
 
 
 def stream_pcm(pcm_iter, rate: int, channels: int, bits: int) -> None:
     """Play raw PCM chunks as they arrive. Blocking; stop() interrupts."""
     global _active_stream
     gen = _next_generation()
-    stream = _WaveOutStream(rate, channels, bits)
+    stream = _open_pcm_stream(rate, channels, bits)
+    block = max(1, channels * bits // 8)
     with _lock:
         _active_stream = stream
     try:
@@ -74,12 +97,21 @@ def stream_pcm(pcm_iter, rate: int, channels: int, bits: int) -> None:
                 return
             pending += chunk
             if len(pending) >= _MIN_WRITE_BYTES:
-                stream.write(pending)
-                pending = b""
+                # Only write whole sample frames; carry the remainder so a
+                # chunk boundary can never split an int16 sample.
+                cut = len(pending) - (len(pending) % block)
+                stream.write(pending[:cut])
+                pending = pending[cut:]
         if pending and _is_current(gen):
-            stream.write(pending)
+            stream.write(pending[: len(pending) - (len(pending) % block)])
         if _is_current(gen):
             stream.drain()
+    except Exception:
+        # stop() aborting the device mid-write raises from the backend
+        # (e.g. PortAudioError). That is an intentional interruption,
+        # not a failure -- only real errors propagate.
+        if _is_current(gen):
+            raise
     finally:
         with _lock:
             if _active_stream is stream:
@@ -254,4 +286,49 @@ else:
 
     class _WaveOutStream:  # pragma: no cover - non-Windows placeholder
         def __init__(self, *args):
-            raise OSError("PCM streaming is only implemented on Windows")
+            raise OSError("waveOut streaming is Windows-only")
+
+
+class _SoundDeviceStream:
+    """PCM output via the optional `sounddevice` package (PortAudio).
+
+    Same interface as _WaveOutStream: write / drain / abort / close.
+    RawOutputStream.write() blocks for backpressure; stop() waits for
+    buffered audio to finish; abort() discards it immediately.
+    """
+
+    def __init__(self, rate: int, channels: int, bits: int):
+        if bits != 16:
+            raise OSError(f"sounddevice backend expects 16-bit PCM, got {bits}")
+        import sounddevice as sd
+
+        self._stream = sd.RawOutputStream(
+            samplerate=rate, channels=channels, dtype="int16"
+        )
+        self._stream.start()
+        self._closed = False
+
+    def write(self, data: bytes) -> None:
+        if not self._closed and data:
+            self._stream.write(data)
+
+    def drain(self) -> None:
+        if not self._closed:
+            self._stream.stop()  # blocks until buffered audio has played
+
+    def abort(self) -> None:
+        if not self._closed:
+            try:
+                self._stream.abort()
+            except Exception:
+                pass
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            self._stream.abort()
+            self._stream.close()
+        except Exception:
+            pass

@@ -198,14 +198,24 @@ def _speaker_loop() -> None:
             continue
         _warned_server_down = False
         try:
-            with server.open_tts_stream(
-                text, settings.request_voice(), port
-            ) as (fmt, pcm_iter):
+            if playback.stream_supported():
+                with server.open_tts_stream(
+                    text, settings.request_voice(), port
+                ) as (fmt, pcm_iter):
+                    with _lock:
+                        if gen != _gen:
+                            continue
+                    rate, channels, bits = fmt
+                    playback.stream_pcm(pcm_iter, rate, channels, bits)
+            else:
+                # No streaming backend (e.g. macOS/Linux without the
+                # optional sounddevice package): buffer this sentence's
+                # WAV and hand it to the OS file player instead.
+                wav = server.synthesize(text, settings.request_voice(), port)
                 with _lock:
                     if gen != _gen:
                         continue
-                rate, channels, bits = fmt
-                playback.stream_pcm(pcm_iter, rate, channels, bits)
+                playback.play_wav_bytes(wav)
             _warned_synth_error = False  # healthy again
         except Exception as exc:
             # Drop everything queued -- one failure means the rest of

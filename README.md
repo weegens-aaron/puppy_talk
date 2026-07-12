@@ -28,9 +28,12 @@ audio or video file.
   `stream_event`, and `custom_command` plugin hooks)
 - [uv](https://docs.astral.sh/uv/) on PATH (`uvx` manages the TTS
   sidecar and the one-time audio converter)
-- Windows, macOS, or Linux. Low-latency streaming playback is
-  Windows-only for now; macOS/Linux use a buffered sentence pipeline
-  (needs `afplay`, `paplay`, `aplay`, or `ffplay` on PATH)
+- Windows, macOS, or Linux. Streaming playback works out of the box on
+  Windows (winmm waveOut, stdlib). On macOS/Linux, install the optional
+  [`sounddevice`](https://pypi.org/project/sounddevice/) package into
+  code-puppy's environment for the same low-latency streaming (e.g.
+  `uvx --with sounddevice code-puppy`); without it, speech falls back
+  to buffered per-sentence playback via `afplay`/`paplay`/`aplay`/`ffplay`
 - Disk/network for first run: the sidecar env downloads CPU torch
   (~120 MB) plus the TTS model
 
@@ -153,7 +156,8 @@ Three speech paths, fastest first:
    cancels; replies under `live_min_start` chars stay silent until the
    turn confirms them, which filters interim preambles.
 2. **streaming** (turn end) -- WAV is decoded off the live HTTP response
-   and PCM is pushed to the sound card as the sidecar generates it.
+   and PCM is pushed to the sound card as the sidecar generates it
+   (waveOut on Windows, `sounddevice`/PortAudio elsewhere when installed).
 3. **pipeline** (fallback) -- sentence-group N plays while N+1
    synthesizes.
 
@@ -177,7 +181,7 @@ next instance to speak respawns it.
 - `register_callbacks.py` -- plugin entry point: hooks + `/talk` command
 - `live_speech.py` -- speculative sentence-by-sentence speech during streaming
 - `server.py` -- sidecar lifecycle, HTTP client, WAV header repair
-- `playback.py` -- playback backends (waveOut streaming, file players) with stop support
+- `playback.py` -- playback backends (waveOut + sounddevice streaming, file players) with stop support
 - `voice_host.py` -- voice import (ffmpeg via uvx) + local HTTP voice server
 - `sanitize.py` -- markdown -> speakable text, sentence chunking
 - `settings.py` -- JSON-backed config, process-local activation
