@@ -1,0 +1,13 @@
+# puppy_talk release allowlist -- the ONLY files that ship in the zip.
+# Read by scripts/build-release.sh. One path per line; # starts a comment.
+# Anything not listed here is excluded by construction (fail-closed).
+__init__.py
+register_callbacks.py
+live_speech.py
+playback.py
+sanitize.py
+server.py
+settings.py
+voice_host.py
+README.md
+LICENSE

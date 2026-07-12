@@ -5,6 +5,13 @@ voices/
 *.safetensors
 __pycache__/
 
+# Internal notes -- not part of the published plugin
+research/
+
+# Release build outputs
+staging/
+dist/
+
 # Local task tracking (beads / dolt)
 .beads/
 .dolt/

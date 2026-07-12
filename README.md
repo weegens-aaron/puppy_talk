@@ -39,14 +39,56 @@ audio or video file.
 
 ## Install
 
-```
-git clone <this-repo> ~/.code_puppy/plugins/puppy_talk
+Pick your platform -- one line, copy, paste, run. Then **restart
+code-puppy** and the `/talk` command is available. Plugins live at
+`~/.code_puppy/plugins/`; the zip contains a single top-level
+`puppy_talk/` folder, so extract, don't nest.
+
+### macOS / Linux
+
+```bash
+curl -fsSL https://github.com/weegens-aaron/puppy_talk/releases/latest/download/puppy-talk.zip -o /tmp/puppy-talk.zip && unzip -o /tmp/puppy-talk.zip -d ~/.code_puppy/plugins/
 ```
 
-(or copy this directory to `~/.code_puppy/plugins/puppy_talk` -- the
-plugin loader requires the directory to contain `register_callbacks.py`)
+### Windows (PowerShell)
 
-Restart code-puppy. Done.
+```powershell
+Invoke-WebRequest -Uri https://github.com/weegens-aaron/puppy_talk/releases/latest/download/puppy-talk.zip -OutFile $env:TEMP\puppy-talk.zip; Expand-Archive -Force $env:TEMP\puppy-talk.zip -DestinationPath ~\.code_puppy\plugins\
+```
+
+### Manual download (any platform)
+
+1. Go to the [Releases page](https://github.com/weegens-aaron/puppy_talk/releases/latest)
+2. Download **`puppy-talk.zip`** from the assets
+3. Extract so `puppy_talk/` lands directly inside `~/.code_puppy/plugins/`
+4. Restart code-puppy
+
+### Verify your download (optional)
+
+Every release publishes `puppy-talk.zip.sha256` next to the zip.
+
+```bash
+# macOS / Linux (after the install one-liner)
+curl -fsSL https://github.com/weegens-aaron/puppy_talk/releases/latest/download/puppy-talk.zip.sha256 -o /tmp/puppy-talk.zip.sha256
+( cd /tmp && shasum -a 256 -c puppy-talk.zip.sha256 )   # prints "puppy-talk.zip: OK"
+```
+
+```powershell
+# Windows PowerShell (after the install one-liner)
+Invoke-WebRequest -Uri https://github.com/weegens-aaron/puppy_talk/releases/latest/download/puppy-talk.zip.sha256 -OutFile $env:TEMP\puppy-talk.zip.sha256
+$expected = (Get-Content $env:TEMP\puppy-talk.zip.sha256).Split(' ')[0]
+$actual = (Get-FileHash $env:TEMP\puppy-talk.zip -Algorithm SHA256).Hash
+if ($actual -eq $expected) { 'OK: checksum matches' } else { Write-Error 'CHECKSUM MISMATCH -- do not install' }
+```
+
+If verification fails, don't install -- re-download or report it.
+
+### Upgrade / Uninstall
+
+| Action | How |
+|---|---|
+| **Upgrade** | re-run the install one-liner -- it always pulls the latest release. Your `puppy_talk.json` and `voices/` survive: the zip doesn't contain them and extraction only overwrites files present in the archive |
+| **Uninstall** | delete `~/.code_puppy/plugins/puppy_talk/` |
 
 ## Quickstart
 
@@ -185,7 +227,9 @@ next instance to speak respawns it.
 - `voice_host.py` -- voice import (ffmpeg via uvx) + local HTTP voice server
 - `sanitize.py` -- markdown -> speakable text, sentence chunking
 - `settings.py` -- JSON-backed config, process-local activation
-- `research/tech/` -- the research report this design came from
+- `scripts/build-release.sh` -- builds the release zip from the
+  allowlist in `scripts/ship-manifest.txt` (run in bash/Git Bash);
+  version comes from `__init__.py`
 
 Keep files under 600 lines; playback backends and speech policy are
 deliberately separate modules.
