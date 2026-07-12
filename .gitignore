@@ -1,0 +1,12 @@
+# puppy_talk local state -- never ship personal data
+puppy_talk.json
+pocket_tts_server.log
+voices/
+*.safetensors
+__pycache__/
+
+# Local task tracking (beads / dolt)
+.beads/
+.dolt/
+*.db
+.beads-credential-key
