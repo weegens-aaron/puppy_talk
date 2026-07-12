@@ -1,12 +1,17 @@
 """Turn agent markdown output into something worth speaking aloud.
 
-Strips code blocks, markdown syntax, URLs, and table noise so the TTS
-voice reads prose instead of punctuation soup.
+Strips markdown syntax, URLs, and table noise so the TTS voice reads
+prose instead of punctuation soup. Fenced code blocks are omitted --
+unless they are short one-liners (pipelines, commands), which are
+spoken as-is.
 """
 
 import re
 
 DEFAULT_MAX_CHARS = 1500
+
+# Fenced blocks whose joined content fits this budget are spoken.
+_SPEAKABLE_FENCE_CHARS = 120
 
 _FENCED_CODE = re.compile(r"```.*?```", re.DOTALL)
 _INLINE_CODE = re.compile(r"`([^`\n]*)`")
@@ -26,12 +31,29 @@ _SENTENCE_END = re.compile(r"[.!?][\"')\]]?\s")
 _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])[\"')\]]*\s+")
 
 
+def _fence_replacement(match: re.Match) -> str:
+    """Speak short fenced one-liners; omit real code blocks."""
+    inner = match.group(0)[3:-3]
+    lines = [ln.strip() for ln in inner.split("\n")]
+    # A multi-line block may open with a language tag (single word on
+    # the fence line); drop it. A single-line block is pure content.
+    if len(lines) > 1 and lines[0] and " " not in lines[0]:
+        lines = lines[1:]
+    content_lines = [ln for ln in lines if ln]
+    # Only a SINGLE content line qualifies as speakable -- multi-line
+    # blocks are code no matter how short, and code reads as gibberish.
+    if len(content_lines) == 1 and len(content_lines[0]) <= _SPEAKABLE_FENCE_CHARS:
+        return f" {content_lines[0]} "
+    return " Code block omitted. "
+
+
 def sanitize(text: str, max_chars: int = DEFAULT_MAX_CHARS) -> str:
     """Return a speakable version of *text*, or an empty string."""
     if not text or not text.strip():
         return ""
 
-    out = _FENCED_CODE.sub(" Code block omitted. ", text)
+    out = _FENCED_CODE.sub(_fence_replacement, text)
+    out = out.replace("\u2192", " then ")  # a -> b reads as "a then b"
     out = _TABLE_ROW.sub(" ", out)
     out = _HORIZONTAL_RULE.sub(" ", out)
     out = _MD_IMAGE.sub(" ", out)
